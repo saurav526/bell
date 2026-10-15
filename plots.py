@@ -1,60 +1,41 @@
-"""Simple theory plot; no Qiskit visualization dependencies."""
+"""Command-line interface: ``bell-lab --shots 8192 --visibility 0.9``."""
 
-import math
+import argparse
 
-import matplotlib.pyplot as plt
-import numpy as np
-
-from bell.entropy import randomness_bound
+from bell.runner import run_chsh
 
 
-def show_results(visibility, measured_s=None, show_noise_sweep=True):
-    """Plot theoretical entropy curve and selected operating point."""
-    if show_noise_sweep:
-        visibilities = np.linspace(0.0, 1.0, 301)
-    else:
-        visibilities = np.array([visibility])
-
-    ideal_s = 2.0 * math.sqrt(2.0) * visibilities
-    entropy = np.array([randomness_bound(s) for s in ideal_s])
-    threshold = 1.0 / math.sqrt(2.0)
-
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.3))
-
-    axes[0].plot(visibilities, ideal_s, label="Ideal model S = 2√2 v")
-    axes[0].axhline(2.0, linestyle="--", label="Local bound S = 2")
-    axes[0].axvline(
-        threshold, linestyle=":", label="Model threshold v = 1/√2"
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="bell-lab",
+        description="Simulate a CHSH Bell test and an illustrative entropy bound.",
     )
-    axes[0].axvline(
-        visibility, linestyle="-.", label=f"Selected v = {visibility:.3f}"
-    )
-    if measured_s is not None:
-        axes[0].scatter(
-            [visibility], [measured_s],
-            label="Measured/modelled point estimate", zorder=4
-        )
-    axes[0].set_xlabel("Visibility v")
-    axes[0].set_ylabel("CHSH S")
-    axes[0].set_title("Bell violation versus visibility")
-    axes[0].set_ylim(0.0, 3.0)
-    axes[0].grid(True, alpha=0.25)
-    axes[0].legend(fontsize=8)
+    p.add_argument("--shots", type=int, default=4096, help="shots per setting")
+    p.add_argument("--visibility", type=float, default=1.0, help="noise visibility in [0, 1]")
+    p.add_argument("--seed", type=int, default=None, help="simulator seed")
+    p.add_argument("--product-state", action="store_true", help="use unentangled control")
+    p.add_argument("--plot", action="store_true", help="show theory plots")
+    return p
 
-    axes[1].plot(visibilities, entropy, label="Theoretical bound")
-    axes[1].axvline(threshold, linestyle=":", label="Threshold v = 1/√2")
-    axes[1].axvline(
-        visibility, linestyle="-.", label=f"Selected v = {visibility:.3f}"
-    )
-    axes[1].set_xlabel("Visibility v")
-    axes[1].set_ylabel("Bound (bits per round)")
-    axes[1].set_title("Illustrative min-entropy bound")
-    axes[1].set_ylim(-0.03, 1.05)
-    axes[1].grid(True, alpha=0.25)
-    axes[1].legend(fontsize=8)
 
-    fig.suptitle(
-        "Bell Test and Randomness Lab — theory/model, not certification"
-    )
-    fig.tight_layout()
-    plt.show()
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    res = run_chsh(args.shots, args.visibility, args.seed, args.product_state)
+
+    print(f"Shots per setting : {res.shots}")
+    print(f"Visibility        : {res.visibility:.3f}")
+    print("Correlations      : " + ", ".join(f"{e:+.4f}" for e in res.model_correlations))
+    print(f"CHSH S            : {res.s_value:.4f} +/- {res.std_error:.4f}")
+    verdict = "violates" if res.s_value > 2.0 else "does not violate"
+    print(f"Result {verdict} the classical bound S <= 2")
+    print(f"Min-entropy bound : {res.entropy_bound:.4f} bits/round (illustrative)")
+
+    if args.plot:
+        from bell.plots import show_results
+
+        show_results(args.visibility, measured_s=res.s_value)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

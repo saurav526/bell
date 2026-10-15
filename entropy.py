@@ -1,19 +1,64 @@
-"""Theoretical CHSH-based min-entropy illustration."""
+"""Circuit construction and exact ideal CHSH calculation."""
 
 import math
 
+from qiskit import QuantumCircuit
+from qiskit.quantum_info import Statevector
 
-def randomness_bound(s):
-    """Return the stated theoretical lower bound in bits per round.
+A0 = 0.0
+A1 = math.pi / 2
+B0 = math.pi / 4
+B1 = -math.pi / 4
 
-    H_min >= 1 - log2(1 + sqrt(2 - S^2/4)), for 2 < S <= 2 sqrt(2).
-    Outside the violating interval this lab reports zero, not a certificate.
+SETTING_PAIRS = [
+    (A0, B0),
+    (A0, B1),
+    (A1, B0),
+    (A1, B1),
+]
+
+
+def build_circuit(theta_a, theta_b, product_state=False):
+    """Measure local observables cos(theta) Z + sin(theta) X.
+
+    Prepare |Phi+> = (|00> + |11>)/sqrt(2), unless a product-state
+    control is requested. RY(-theta) followed by Z measurement realizes
+    the stated observable. q0 is Alice; q1 is Bob.
     """
-    s = float(s)
-    if not math.isfinite(s) or s <= 2.0:
-        return 0.0
+    qc = QuantumCircuit(2, 2)
+    if not product_state:
+        qc.h(0)
+        qc.cx(0, 1)
 
-    s = min(s, 2.0 * math.sqrt(2.0))
-    radicand = max(0.0, 2.0 - s * s / 4.0)
-    value = 1.0 - math.log2(1.0 + math.sqrt(radicand))
-    return max(0.0, min(1.0, value))
+    qc.ry(-float(theta_a), 0)
+    qc.ry(-float(theta_b), 1)
+    qc.measure(0, 0)
+    qc.measure(1, 1)
+    return qc
+
+
+def exact_correlation(theta_a, theta_b):
+    """Compute ideal correlation from an unmeasured statevector."""
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.ry(-float(theta_a), 0)
+    qc.ry(-float(theta_b), 1)
+    state = Statevector.from_instruction(qc)
+    probabilities = state.probabilities_dict()
+    expectation = 0.0
+    for bitstring, probability in probabilities.items():
+        bits = bitstring.replace(" ", "")
+        expectation += (
+            (1.0 if bits[-1] == bits[-2] else -1.0) * probability
+        )
+    return float(expectation)
+
+
+def exact_chsh():
+    """Return the exact ideal CHSH value for the selected angle convention."""
+    e00 = exact_correlation(A0, B0)
+    e01 = exact_correlation(A0, B1)
+    e10 = exact_correlation(A1, B0)
+    e11 = exact_correlation(A1, B1)
+    return e00 + e01 + e10 - e11
