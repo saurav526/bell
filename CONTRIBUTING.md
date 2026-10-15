@@ -4,7 +4,7 @@ Thanks for your interest in improving Bell Test and Randomness Lab!
 
 ## Setup
 ```bash
-git clone https://github.com/<you>/bell-test-randomness-lab.git
+git clone https://github.com/saurav526/bell-test-randomness-lab.git
 cd bell-test-randomness-lab
 python -m venv .venv && source .venv/bin/activate
 make install
